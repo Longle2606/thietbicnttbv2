@@ -367,13 +367,7 @@ export default function App() {
   });
 
   // Extract unique departments dynamically from data
-  const allDepartments = Array.from(
-    new Set([
-      ...DEPARTMENTS_LIST,
-      ...computers.map((c) => c.khoaPhong),
-      ...printers.map((p) => p.khoaPhong),
-      ...monitors.map((m) => m.khoaPhong),
-    ])
+  const allDepartments = DEPARTMENTS_LIST;
   ).filter(Boolean);
 
   if (!isLoggedIn) {
