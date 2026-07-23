@@ -279,6 +279,7 @@ export const DEPARTMENTS_LIST = [
   'Phòng Quản lý chất lượng',
   'Phòng Vật tư - Thiết bị y tế',
   'Khoa Khám bệnh',
+  'Khoa Cấp cứu',
   'Khoa Hồi sức tích cực - chống độc',
   'Khoa Nội Tổng quát',
   'Khoa Nội tim mạch - lão khoa',
