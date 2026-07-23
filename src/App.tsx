@@ -94,7 +94,12 @@ export default function App() {
 
       if (rowsToUpsert.length > 0) {
         const { error } = await supabase.from('devices').upsert(rowsToUpsert, { onConflict: 'id' });
-        if (error) console.error('Lỗi khi đồng bộ Supabase:', error);
+        if (error) {
+          console.error('❌ Lỗi khi đồng bộ Supabase:', error);
+          alert('Chưa thể lưu lên Cloud Supabase: ' + error.message);
+        } else {
+          console.log('✅ Đã lưu dữ liệu thành công lên Supabase!');
+        }
       }
     } catch (err) {
       console.error('Lỗi lưu server Supabase:', err);
@@ -186,12 +191,17 @@ export default function App() {
     }
   };
 
+  // SỬA ĐỔI QUAN TRỌNG: Đảm bảo thiết bị mới luôn có id duy nhất
   const handleSaveComputer = (computerData: Computer) => {
     let updated: Computer[];
     if (editingItem) {
       updated = computers.map((c) => (c.id === computerData.id ? computerData : c));
     } else {
-      updated = [computerData, ...computers];
+      const newItem = {
+        ...computerData,
+        id: computerData.id || 'pc-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4)
+      };
+      updated = [newItem, ...computers];
     }
     syncSaveData(updated, printers, monitors);
   };
@@ -201,7 +211,11 @@ export default function App() {
     if (editingItem) {
       updated = printers.map((p) => (p.id === printerData.id ? printerData : p));
     } else {
-      updated = [printerData, ...printers];
+      const newItem = {
+        ...printerData,
+        id: printerData.id || 'pr-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4)
+      };
+      updated = [newItem, ...printers];
     }
     syncSaveData(computers, updated, monitors);
   };
@@ -211,7 +225,11 @@ export default function App() {
     if (editingItem) {
       updated = monitors.map((m) => (m.id === monitorData.id ? monitorData : m));
     } else {
-      updated = [monitorData, ...monitors];
+      const newItem = {
+        ...monitorData,
+        id: monitorData.id || 'mh-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4)
+      };
+      updated = [newItem, ...monitors];
     }
     syncSaveData(computers, printers, updated);
   };
