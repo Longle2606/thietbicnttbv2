@@ -12,6 +12,7 @@ import { EquipmentFormModal } from './components/EquipmentFormModal';
 import { Computer, EquipmentStatus, Monitor, Printer, RepairRecord } from './types';
 import { DEPARTMENTS_LIST, INITIAL_COMPUTERS, INITIAL_MONITORS, INITIAL_PRINTERS } from './data/initialData';
 import { exportEquipmentToExcel, exportSingleDeviceReport, ParsedImportResult } from './utils/excelHelpers';
+import { supabase } from './supabaseClient';
 
 export default function App() {
   // Authentication State
@@ -46,46 +47,66 @@ export default function App() {
 
   // Load Data on Mount
   useEffect(() => {
-    fetchDataFromBackend();
+    fetchDataFromSupabase();
   }, []);
 
-  const fetchDataFromBackend = async () => {
+  // Lấy dữ liệu trực tiếp từ Supabase
+  const fetchDataFromSupabase = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/data');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.monitors && data.computers && data.printers) {
-          setMonitors(data.monitors);
-          setComputers(data.computers);
-          setPrinters(data.printers);
-        }
+      const { data, error } = await supabase.from('devices').select('*');
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const fetchedComputers: Computer[] = [];
+        const fetchedPrinters: Printer[] = [];
+        const fetchedMonitors: Monitor[] = [];
+
+        data.forEach((row) => {
+          if (row.type === 'may_tinh') fetchedComputers.push(row.data);
+          else if (row.type === 'may_in') fetchedPrinters.push(row.data);
+          else if (row.type === 'man_hinh') fetchedMonitors.push(row.data);
+        });
+
+        setComputers(fetchedComputers);
+        setPrinters(fetchedPrinters);
+        setMonitors(fetchedMonitors);
       }
     } catch (err) {
-      console.log('Backend sync offline, using local data storage');
+      console.warn('Không thể nạp dữ liệu Supabase, sử dụng dữ liệu mặc định:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Persist Data to Backend & LocalStorage
+  // Đồng bộ hóa danh sách thiết bị lên Supabase
   const syncSaveData = async (newComputers: Computer[], newPrinters: Printer[], newMonitors: Monitor[]) => {
     setComputers(newComputers);
     setPrinters(newPrinters);
     setMonitors(newMonitors);
 
     try {
-      await fetch('/api/data', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          computers: newComputers,
-          printers: newPrinters,
-          monitors: newMonitors,
-        }),
-      });
+      const rowsToUpsert = [
+        ...newComputers.map((c) => ({ id: c.id, type: 'may_tinh', data: c, updated_at: new Date().toISOString() })),
+        ...newPrinters.map((p) => ({ id: p.id, type: 'may_in', data: p, updated_at: new Date().toISOString() })),
+        ...newMonitors.map((m) => ({ id: m.id, type: 'man_hinh', data: m, updated_at: new Date().toISOString() })),
+      ];
+
+      if (rowsToUpsert.length > 0) {
+        const { error } = await supabase.from('devices').upsert(rowsToUpsert, { onConflict: 'id' });
+        if (error) console.error('Lỗi khi đồng bộ Supabase:', error);
+      }
     } catch (err) {
-      console.error('Failed to save to server:', err);
+      console.error('Lỗi lưu server Supabase:', err);
+    }
+  };
+
+  // Xóa 1 thiết bị khỏi Supabase
+  const deleteDeviceFromSupabase = async (id: string) => {
+    try {
+      await supabase.from('devices').delete().eq('id', id);
+    } catch (err) {
+      console.error('Lỗi xóa thiết bị Supabase:', err);
     }
   };
 
@@ -103,16 +124,11 @@ export default function App() {
   };
 
   const handleResetData = async () => {
-    if (confirm('Bạn có chắc muốn khôi phục dữ liệu ban đầu? Tất cả thay đổi sẽ bị lập lại.')) {
+    if (confirm('Bạn có chắc muốn khôi phục dữ liệu ban đầu? Tất cả thay đổi sẽ bị làm mới.')) {
       try {
-        const res = await fetch('/api/data/reset', { method: 'POST' });
-        if (res.ok) {
-          const data = await res.json();
-          setComputers(data.data.computers);
-          setPrinters(data.data.printers);
-          setMonitors(data.data.monitors);
-          alert('Đã khôi phục dữ liệu gốc!');
-        }
+        await supabase.from('devices').delete().neq('id', '0'); // Xóa sạch dữ liệu trên Supabase
+        await syncSaveData(INITIAL_COMPUTERS, INITIAL_PRINTERS, INITIAL_MONITORS);
+        alert('Đã khôi phục dữ liệu gốc thành công!');
       } catch (err) {
         setComputers(INITIAL_COMPUTERS);
         setPrinters(INITIAL_PRINTERS);
@@ -146,23 +162,26 @@ export default function App() {
     setShowFormModal(true);
   };
 
-  const handleDeleteComputer = (id: string) => {
+  const handleDeleteComputer = async (id: string) => {
     if (confirm('Bạn có chắc chắn muốn xóa máy tính này khỏi hệ thống?')) {
       const updated = computers.filter((c) => c.id !== id);
+      await deleteDeviceFromSupabase(id);
       syncSaveData(updated, printers, monitors);
     }
   };
 
-  const handleDeletePrinter = (id: string) => {
+  const handleDeletePrinter = async (id: string) => {
     if (confirm('Bạn có chắc chắn muốn xóa máy in này khỏi hệ thống?')) {
       const updated = printers.filter((p) => p.id !== id);
+      await deleteDeviceFromSupabase(id);
       syncSaveData(computers, updated, monitors);
     }
   };
 
-  const handleDeleteMonitor = (id: string) => {
+  const handleDeleteMonitor = async (id: string) => {
     if (confirm('Bạn có chắc chắn muốn xóa màn hình này khỏi hệ thống?')) {
       const updated = monitors.filter((m) => m.id !== id);
+      await deleteDeviceFromSupabase(id);
       syncSaveData(computers, printers, updated);
     }
   };
