@@ -13,6 +13,10 @@ import { Computer, EquipmentStatus, Monitor, Printer, RepairRecord } from './typ
 import { DEPARTMENTS_LIST, INITIAL_COMPUTERS, INITIAL_MONITORS, INITIAL_PRINTERS } from './data/initialData';
 import { exportEquipmentToExcel, exportSingleDeviceReport, ParsedImportResult } from './utils/excelHelpers';
 
+// 1. IMPORT SUPABASE CLIENT VÀ DEVICE SERVICE
+import { supabase } from './supabaseClient';
+import { upsertSingleDevice, batchUpsertDevices } from './deviceService';
+
 export default function App() {
   // Authentication State
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
@@ -23,9 +27,9 @@ export default function App() {
   });
 
   // Equipment Datasets State
-  const [computers, setComputers] = useState<Computer[]>(INITIAL_COMPUTERS);
-  const [printers, setPrinters] = useState<Printer[]>(INITIAL_PRINTERS);
-  const [monitors, setMonitors] = useState<Monitor[]>(INITIAL_MONITORS);
+  const [computers, setComputers] = useState<Computer[]>([]);
+  const [printers, setPrinters] = useState<Printer[]>([]);
+  const [monitors, setMonitors] = useState<Monitor[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   // Filters State
@@ -44,48 +48,54 @@ export default function App() {
   const [repairDevice, setRepairDevice] = useState<Computer | Printer | null>(null);
   const [repairDeviceType, setRepairDeviceType] = useState<'may_tinh' | 'may_in'>('may_tinh');
 
-  // Load Data on Mount
+  // Load Data on Mount from Supabase
   useEffect(() => {
-    fetchDataFromBackend();
+    fetchDataFromSupabase();
   }, []);
 
-  const fetchDataFromBackend = async () => {
+  // 2. HÀM LẤY DỮ LIỆU TỪ SUPABASE CLOUD
+  const fetchDataFromSupabase = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/data');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.monitors && data.computers && data.printers) {
-          setMonitors(data.monitors);
-          setComputers(data.computers);
-          setPrinters(data.printers);
-        }
+      const { data, error } = await supabase.from('devices').select('*');
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        // Lọc dữ liệu theo từng loại từ Cloud
+        const loadedComputers = data.filter((item) => item.type === 'may_tinh').map((item) => item.data);
+        const loadedPrinters = data.filter((item) => item.type === 'may_in').map((item) => item.data);
+        const loadedMonitors = data.filter((item) => item.type === 'man_hinh').map((item) => item.data);
+
+        setComputers(loadedComputers);
+        setPrinters(loadedPrinters);
+        setMonitors(loadedMonitors);
+      } else {
+        // Khởi tạo bằng dữ liệu mẫu nếu chưa có dữ liệu trên Cloud
+        await batchUpsertDevices(INITIAL_COMPUTERS, 'may_tinh');
+        await batchUpsertDevices(INITIAL_PRINTERS, 'may_in');
+        await batchUpsertDevices(INITIAL_MONITORS, 'man_hinh');
+
+        setComputers(INITIAL_COMPUTERS);
+        setPrinters(INITIAL_PRINTERS);
+        setMonitors(INITIAL_MONITORS);
       }
     } catch (err) {
-      console.log('Backend sync offline, using local data storage');
+      console.error('Lỗi lấy dữ liệu từ Supabase:', err);
+      setComputers(INITIAL_COMPUTERS);
+      setPrinters(INITIAL_PRINTERS);
+      setMonitors(INITIAL_MONITORS);
     } finally {
       setLoading(false);
     }
   };
 
-  // Persist Data to Backend & LocalStorage
-  const syncSaveData = async (newComputers: Computer[], newPrinters: Printer[], newMonitors: Monitor[]) => {
-    setComputers(newComputers);
-    setPrinters(newPrinters);
-    setMonitors(newMonitors);
-
+  // 3. HÀM XÓA DỮ LIỆU TRÊN CLOUD
+  const deleteDeviceFromSupabase = async (id: string) => {
     try {
-      await fetch('/api/data', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          computers: newComputers,
-          printers: newPrinters,
-          monitors: newMonitors,
-        }),
-      });
+      await supabase.from('devices').delete().eq('id', id);
     } catch (err) {
-      console.error('Failed to save to server:', err);
+      console.error('Lỗi xóa trên Supabase:', err);
     }
   };
 
@@ -103,20 +113,21 @@ export default function App() {
   };
 
   const handleResetData = async () => {
-    if (confirm('Bạn có chắc muốn khôi phục dữ liệu ban đầu? Tất cả thay đổi sẽ bị lập lại.')) {
+    if (confirm('Bạn có chắc muốn khôi phục dữ liệu ban đầu? Tất cả thay đổi sẽ bị làm mới.')) {
       try {
-        const res = await fetch('/api/data/reset', { method: 'POST' });
-        if (res.ok) {
-          const data = await res.json();
-          setComputers(data.data.computers);
-          setPrinters(data.data.printers);
-          setMonitors(data.data.monitors);
-          alert('Đã khôi phục dữ liệu gốc!');
-        }
-      } catch (err) {
+        await supabase.from('devices').delete().neq('id', '0'); // Xóa toàn bộ dữ liệu
+        
+        await batchUpsertDevices(INITIAL_COMPUTERS, 'may_tinh');
+        await batchUpsertDevices(INITIAL_PRINTERS, 'may_in');
+        await batchUpsertDevices(INITIAL_MONITORS, 'man_hinh');
+
         setComputers(INITIAL_COMPUTERS);
         setPrinters(INITIAL_PRINTERS);
         setMonitors(INITIAL_MONITORS);
+
+        alert('Đã khôi phục dữ liệu gốc thành công!');
+      } catch (err) {
+        console.error(err);
       }
     }
   };
@@ -146,55 +157,59 @@ export default function App() {
     setShowFormModal(true);
   };
 
-  const handleDeleteComputer = (id: string) => {
+  const handleDeleteComputer = async (id: string) => {
     if (confirm('Bạn có chắc chắn muốn xóa máy tính này khỏi hệ thống?')) {
-      const updated = computers.filter((c) => c.id !== id);
-      syncSaveData(updated, printers, monitors);
+      setComputers(computers.filter((c) => c.id !== id));
+      await deleteDeviceFromSupabase(id);
     }
   };
 
-  const handleDeletePrinter = (id: string) => {
+  const handleDeletePrinter = async (id: string) => {
     if (confirm('Bạn có chắc chắn muốn xóa máy in này khỏi hệ thống?')) {
-      const updated = printers.filter((p) => p.id !== id);
-      syncSaveData(computers, updated, monitors);
+      setPrinters(printers.filter((p) => p.id !== id));
+      await deleteDeviceFromSupabase(id);
     }
   };
 
-  const handleDeleteMonitor = (id: string) => {
+  const handleDeleteMonitor = async (id: string) => {
     if (confirm('Bạn có chắc chắn muốn xóa màn hình này khỏi hệ thống?')) {
-      const updated = monitors.filter((m) => m.id !== id);
-      syncSaveData(computers, printers, updated);
+      setMonitors(monitors.filter((m) => m.id !== id));
+      await deleteDeviceFromSupabase(id);
     }
   };
 
-  const handleSaveComputer = (computerData: Computer) => {
+  // 4. LƯU TỪNG THIẾT BỊ BẰNG SINGLE INSERT/UPSERT
+  const handleSaveComputer = async (computerData: Computer) => {
     let updated: Computer[];
     if (editingItem) {
       updated = computers.map((c) => (c.id === computerData.id ? computerData : c));
     } else {
       updated = [computerData, ...computers];
     }
-    syncSaveData(updated, printers, monitors);
+    setComputers(updated);
+    await upsertSingleDevice(computerData, 'may_tinh');
   };
 
-  const handleSavePrinter = (printerData: Printer) => {
+  const handleSavePrinter = async (printerData: Printer) => {
     let updated: Printer[];
     if (editingItem) {
       updated = printers.map((p) => (p.id === printerData.id ? printerData : p));
     } else {
       updated = [printerData, ...printers];
     }
-    syncSaveData(computers, updated, monitors);
+    setPrinters(updated);
+    await upsertSingleDevice(printerData, 'may_in');
   };
 
-  const handleSaveMonitor = (monitorData: Monitor) => {
+  const handleSaveMonitor = async (monitorData: Monitor) => {
     let updated: Monitor[];
     if (editingItem) {
       updated = monitors.map((m) => (m.id === monitorData.id ? monitorData : m));
     } else {
       updated = [monitorData, ...monitors];
     }
-    syncSaveData(computers, printers, updated);
+    setMonitors(updated);
+    await upsertSingleDevice(monitorData, 'man_hinh');
   };
 
   // --- REPAIR MODAL HANDLER ---
@@ -210,24 +225,32 @@ export default function App() {
     setShowRepairModal(true);
   };
 
-  const handleSaveRepairHistory = (deviceId: string, repairs: RepairRecord[]) => {
+  const handleSaveRepairHistory = async (deviceId: string, repairs: RepairRecord[]) => {
     if (repairDeviceType === 'may_tinh') {
-      const updated = computers.map((c) => (c.id === deviceId ? { ...c, lichSuSuaChua: repairs } : c));
-      syncSaveData(updated, printers, monitors);
-      if (repairDevice && repairDevice.id === deviceId) {
-        setRepairDevice({ ...repairDevice, lichSuSuaChua: repairs });
+      const target = computers.find((c) => c.id === deviceId);
+      if (target) {
+        const updatedDevice = { ...target, lichSuSuaChua: repairs };
+        setComputers(computers.map((c) => (c.id === deviceId ? updatedDevice : c)));
+        if (repairDevice && repairDevice.id === deviceId) {
+          setRepairDevice(updatedDevice);
+        }
+        await upsertSingleDevice(updatedDevice, 'may_tinh');
       }
     } else {
-      const updated = printers.map((p) => (p.id === deviceId ? { ...p, lichSuSuaChua: repairs } : p));
-      syncSaveData(computers, updated, monitors);
-      if (repairDevice && repairDevice.id === deviceId) {
-        setRepairDevice({ ...repairDevice, lichSuSuaChua: repairs });
+      const target = printers.find((p) => p.id === deviceId);
+      if (target) {
+        const updatedDevice = { ...target, lichSuSuaChua: repairs };
+        setPrinters(printers.map((p) => (p.id === deviceId ? updatedDevice : p)));
+        if (repairDevice && repairDevice.id === deviceId) {
+          setRepairDevice(updatedDevice);
+        }
+        await upsertSingleDevice(updatedDevice, 'may_in');
       }
     }
   };
 
-  // --- IMPORT EXCEL CONFIRM ---
-  const handleImportConfirm = (result: ParsedImportResult, type: 'man_hinh' | 'may_tinh' | 'may_in') => {
+  // 5. NHẬP DỮ LIỆU BẰNG BATCH INSERT (EXCEL IMPORT)
+  const handleImportConfirm = async (result: ParsedImportResult, type: 'man_hinh' | 'may_tinh' | 'may_in') => {
     if (type === 'man_hinh') {
       const newItems: Monitor[] = result.monitors.map((m, idx) => ({
         id: 'mh-imp-' + Date.now() + '-' + idx,
@@ -237,8 +260,8 @@ export default function App() {
         tinhTrang: m.tinhTrang || 'hoat_dong',
         ghiChu: m.ghiChu || 'Import từ file Excel',
       }));
-      const updated = [...newItems, ...monitors];
-      syncSaveData(computers, printers, updated);
+      setMonitors([...newItems, ...monitors]);
+      await batchUpsertDevices(newItems, 'man_hinh');
       alert(`Đã nhập thành công ${newItems.length} màn hình vào hệ thống!`);
     } else if (type === 'may_tinh') {
       const newItems: Computer[] = result.computers.map((c, idx) => ({
@@ -254,8 +277,8 @@ export default function App() {
         tinhTrang: c.tinhTrang || 'hoat_dong',
         lichSuSuaChua: [],
       }));
-      const updated = [...newItems, ...computers];
-      syncSaveData(updated, printers, monitors);
+      setComputers([...newItems, ...computers]);
+      await batchUpsertDevices(newItems, 'may_tinh');
       alert(`Đã nhập thành công ${newItems.length} máy tính vào hệ thống!`);
     } else if (type === 'may_in') {
       const newItems: Printer[] = result.printers.map((p, idx) => ({
@@ -268,8 +291,8 @@ export default function App() {
         tinhTrang: p.tinhTrang || 'hoat_dong',
         lichSuSuaChua: [],
       }));
-      const updated = [...newItems, ...printers];
-      syncSaveData(computers, updated, monitors);
+      setPrinters([...newItems, ...printers]);
+      await batchUpsertDevices(newItems, 'may_in');
       alert(`Đã nhập thành công ${newItems.length} máy in vào hệ thống!`);
     }
   };
@@ -380,7 +403,7 @@ export default function App() {
         {loading ? (
           <div className="p-12 text-center bg-white rounded-2xl shadow-sm">
             <span className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent mb-3" />
-            <p className="text-xs font-semibold text-slate-600">Đang tải danh sách thiết bị...</p>
+            <p className="text-xs font-semibold text-slate-600">Đang đồng bộ dữ liệu từ Cloud Supabase...</p>
           </div>
         ) : (
           <div className="space-y-6">
