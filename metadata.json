@@ -1,6 +1,0 @@
-{
-  "name": "Bệnh viện II Lâm Đồng - Quản Lý Thiết Bị IT",
-  "description": "Hệ thống quản lý thiết bị CNTT Bệnh viện II Lâm Đồng: máy tính, máy in, màn hình, lịch sử sửa chữa, nhập xuất file Excel.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
