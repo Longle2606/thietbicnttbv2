@@ -1,6 +1,14 @@
 import React from 'react';
-import { Printer, Wrench, FileSpreadsheet, Edit, Trash2, Calendar, DollarSign, Tag } from 'lucide-react';
-import { Printer as PrinterType } from '../types';
+import { 
+  Printer, 
+  Wrench, 
+  Download, 
+  Edit, 
+  Trash2, 
+  Calendar, 
+  Tag 
+} from 'lucide-react';
+import { Printer as PrinterType, RepairRecord } from '../types';
 import { formatCurrency } from '../utils/excelHelpers';
 
 interface PrinterListProps {
@@ -18,6 +26,30 @@ export const PrinterList: React.FC<PrinterListProps> = ({
   onOpenRepairModal,
   onExportSingleReport,
 }) => {
+  // Hàm hiển thị danh sách các lần sửa chữa xuống dòng kèm STT
+  const renderRepairHistory = (repairs?: RepairRecord[]) => {
+    if (!repairs || repairs.length === 0) {
+      return <span className="text-slate-400 italic text-[11px]">Chưa sửa chữa</span>;
+    }
+
+    return (
+      <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+        {repairs.map((item, idx) => (
+          <div key={item.id || idx} className="text-[11px] leading-tight border-b border-slate-100 pb-1 last:border-0">
+            <span className="font-bold text-emerald-600">{idx + 1}.</span>{' '}
+            <span className="font-medium text-slate-500">
+              [{item.ngay ? item.ngay.split('-').reverse().join('/') : 'N/A'}]:
+            </span>{' '}
+            <span className="text-slate-800">{item.noiDung}</span>{' '}
+            <span className="font-semibold text-amber-600">
+              ({item.chiPhi ? item.chiPhi.toLocaleString('vi-VN') : 0}đ)
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   if (printers.length === 0) {
     return (
       <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
@@ -50,14 +82,19 @@ export const PrinterList: React.FC<PrinterListProps> = ({
               <th className="py-3 px-4">Tên Máy In</th>
               <th className="py-3 px-4">Khoa Phòng</th>
               <th className="py-3 px-4">Năm SD / Giá</th>
+              <th className="py-3 px-4 min-w-[240px]">
+                <div className="flex items-center gap-1">
+                  <Wrench className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Lịch Sử Sửa Chữa</span>
+                </div>
+              </th>
               <th className="py-3 px-4 text-center">Tình Trạng</th>
-              <th className="py-3 px-4 text-center">Sửa Chữa</th>
               <th className="py-3 px-4 text-right">Thao Tác</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200/80 text-xs text-slate-700">
             {printers.map((pr) => {
-              const totalRepairCount = pr.lichSuSuaChua.length;
+              const repairs = pr.lichSuSuaChua || [];
 
               return (
                 <tr key={pr.id} className="hover:bg-slate-50/80 transition-colors">
@@ -69,7 +106,7 @@ export const PrinterList: React.FC<PrinterListProps> = ({
                   </td>
 
                   {/* Tên Máy In */}
-                  <td className="py-3.5 px-4 max-w-[280px]">
+                  <td className="py-3.5 px-4 max-w-[220px]">
                     <div className="font-bold text-slate-800 flex items-center gap-1.5">
                       <Tag className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                       <span>{pr.ten}</span>
@@ -90,6 +127,11 @@ export const PrinterList: React.FC<PrinterListProps> = ({
                     <div className="text-slate-900 font-bold mt-0.5">
                       {formatCurrency(pr.nguyenGia)}
                     </div>
+                  </td>
+
+                  {/* Cột Lịch Sử Sửa Chữa */}
+                  <td className="py-3.5 px-4 max-w-[260px]">
+                    {renderRepairHistory(repairs)}
                   </td>
 
                   {/* Tình Trạng */}
@@ -114,44 +156,37 @@ export const PrinterList: React.FC<PrinterListProps> = ({
                     )}
                   </td>
 
-                  {/* Sửa Chữa Button */}
-                  <td className="py-3.5 px-4 text-center">
-                    <button
-                      onClick={() => onOpenRepairModal(pr)}
-                      className={`inline-flex items-center gap-1.5 p-1.5 px-2.5 rounded-xl text-[11px] font-semibold border transition-all cursor-pointer ${
-                        totalRepairCount > 0
-                          ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
-                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                      }`}
-                      title="Xem và ghi lịch sử sửa chữa máy in"
-                    >
-                      <Wrench className={`w-3.5 h-3.5 ${totalRepairCount > 0 ? 'text-amber-600' : 'text-slate-400'}`} />
-                      <span>{totalRepairCount} lần</span>
-                    </button>
-                  </td>
-
                   {/* Action Buttons */}
                   <td className="py-3.5 px-4 text-right">
                     <div className="flex items-center justify-end space-x-1">
-                      {/* Export Single Machine History */}
+                      {/* 1. Nút Thêm/Quản lý sửa chữa trong Modal */}
                       <button
-                        onClick={() => onExportSingleReport(pr)}
-                        className="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
-                        title="Xuất file Excel thông tin máy in này (gồm lịch sử sửa chữa)"
+                        onClick={() => onOpenRepairModal(pr)}
+                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                        title="Thêm/Quản lý lịch sử sửa chữa máy in"
                       >
-                        <FileSpreadsheet className="w-4 h-4" />
+                        <Wrench className="w-4 h-4" />
                       </button>
 
-                      {/* Edit */}
+                      {/* 2. Nút Tải xuống lịch sử sửa chữa (Icon Download màu xanh lá) */}
+                      <button
+                        onClick={() => onExportSingleReport(pr)}
+                        className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                        title="Tải xuống lịch sử sửa chữa máy in này"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+
+                      {/* 3. Nút Sửa thông tin */}
                       <button
                         onClick={() => onEdit(pr)}
-                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                        className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
                         title="Chỉnh sửa thông tin máy in"
                       >
                         <Edit className="w-4 h-4" />
                       </button>
 
-                      {/* Delete */}
+                      {/* 4. Nút Xóa */}
                       <button
                         onClick={() => onDelete(pr.id)}
                         className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"

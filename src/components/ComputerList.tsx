@@ -1,7 +1,17 @@
 import React from 'react';
-import { HardDrive, Wrench, FileSpreadsheet, Edit, Trash2, Monitor as MonitorIcon, Cpu, Calendar, DollarSign, MapPin } from 'lucide-react';
-import { Computer, Monitor } from '../types';
-import { formatCurrency, STATUS_LABELS } from '../utils/excelHelpers';
+import { 
+  HardDrive, 
+  Wrench, 
+  Download, 
+  Edit, 
+  Trash2, 
+  Monitor as MonitorIcon, 
+  Cpu, 
+  Calendar, 
+  MapPin 
+} from 'lucide-react';
+import { Computer, Monitor, RepairRecord } from '../types';
+import { formatCurrency } from '../utils/excelHelpers';
 
 interface ComputerListProps {
   computers: Computer[];
@@ -20,10 +30,33 @@ export const ComputerList: React.FC<ComputerListProps> = ({
   onOpenRepairModal,
   onExportSingleReport,
 }) => {
-  // Helper to find monitor name by maManHinh
   const getMonitorInfo = (maManHinh: string) => {
     if (!maManHinh) return null;
     return monitors.find((m) => m.maQuanLy.toLowerCase() === maManHinh.toLowerCase());
+  };
+
+  // Hàm hiển thị danh sách các lần sửa chữa xuống dòng kèm STT
+  const renderRepairHistory = (repairs?: RepairRecord[]) => {
+    if (!repairs || repairs.length === 0) {
+      return <span className="text-slate-400 italic text-[11px]">Chưa sửa chữa</span>;
+    }
+
+    return (
+      <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+        {repairs.map((item, idx) => (
+          <div key={item.id || idx} className="text-[11px] leading-tight border-b border-slate-100 pb-1 last:border-0">
+            <span className="font-bold text-blue-600">{idx + 1}.</span>{' '}
+            <span className="font-medium text-slate-500">
+              [{item.ngay ? item.ngay.split('-').reverse().join('/') : 'N/A'}]:
+            </span>{' '}
+            <span className="text-slate-800">{item.noiDung}</span>{' '}
+            <span className="font-semibold text-amber-600">
+              ({item.chiPhi ? item.chiPhi.toLocaleString('vi-VN') : 0}đ)
+            </span>
+          </div>
+        ))}
+      </div>
+    );
   };
 
   if (computers.length === 0) {
@@ -59,15 +92,20 @@ export const ComputerList: React.FC<ComputerListProps> = ({
               <th className="py-3 px-4">Cấu Hình & RAM</th>
               <th className="py-3 px-4">Màn Hình Gán</th>
               <th className="py-3 px-4">Năm SD / Giá</th>
+              <th className="py-3 px-4 min-w-[220px]">
+                <div className="flex items-center gap-1">
+                  <Wrench className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Lịch Sử Sửa Chữa</span>
+                </div>
+              </th>
               <th className="py-3 px-4 text-center">Tình Trạng</th>
-              <th className="py-3 px-4 text-center">Sửa Chữa</th>
               <th className="py-3 px-4 text-right">Thao Tác</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200/80 text-xs text-slate-700">
             {computers.map((comp) => {
               const mappedMon = getMonitorInfo(comp.maManHinh);
-              const totalRepairCount = comp.lichSuSuaChua.length;
+              const repairs = comp.lichSuSuaChua || [];
 
               return (
                 <tr key={comp.id} className="hover:bg-slate-50/80 transition-colors">
@@ -79,7 +117,7 @@ export const ComputerList: React.FC<ComputerListProps> = ({
                   </td>
 
                   {/* Khoa Phòng & Vị Trí */}
-                  <td className="py-3.5 px-4 max-w-[200px]">
+                  <td className="py-3.5 px-4 max-w-[180px]">
                     <div className="font-semibold text-slate-800">{comp.khoaPhong}</div>
                     <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5 truncate" title={comp.viTriSuDung}>
                       <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
@@ -88,7 +126,7 @@ export const ComputerList: React.FC<ComputerListProps> = ({
                   </td>
 
                   {/* Cấu Hình & RAM */}
-                  <td className="py-3.5 px-4 max-w-[240px]">
+                  <td className="py-3.5 px-4 max-w-[200px]">
                     <div className="font-medium text-slate-800 flex items-start gap-1">
                       <Cpu className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" />
                       <span className="line-clamp-2" title={comp.cauHinh}>{comp.cauHinh || 'Chưa có cấu hình'}</span>
@@ -103,7 +141,7 @@ export const ComputerList: React.FC<ComputerListProps> = ({
                   </td>
 
                   {/* Màn Hình Gán */}
-                  <td className="py-3.5 px-4 max-w-[180px]">
+                  <td className="py-3.5 px-4 max-w-[150px]">
                     {comp.maManHinh ? (
                       <div className="bg-purple-50/70 p-1.5 rounded-lg border border-purple-200/60 text-[11px]">
                         <div className="font-bold text-purple-900 flex items-center gap-1">
@@ -130,6 +168,13 @@ export const ComputerList: React.FC<ComputerListProps> = ({
                     </div>
                   </td>
 
+                  {/* Cột Lịch Sử Sửa Chữa dạng danh sách xuống dòng */}
+                  <td className="py-3.5 px-4 max-w-[260px]">
+                    <div className="flex items-center justify-between mb-1">
+                      {renderRepairHistory(repairs)}
+                    </div>
+                  </td>
+
                   {/* Tình Trạng */}
                   <td className="py-3.5 px-4 text-center">
                     {comp.tinhTrang === 'hoat_dong' && (
@@ -152,44 +197,37 @@ export const ComputerList: React.FC<ComputerListProps> = ({
                     )}
                   </td>
 
-                  {/* Sửa Chữa Button */}
-                  <td className="py-3.5 px-4 text-center">
-                    <button
-                      onClick={() => onOpenRepairModal(comp)}
-                      className={`inline-flex items-center gap-1.5 p-1.5 px-2.5 rounded-xl text-[11px] font-semibold border transition-all cursor-pointer ${
-                        totalRepairCount > 0
-                          ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
-                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                      }`}
-                      title="Xem và ghi lịch sử sửa chữa"
-                    >
-                      <Wrench className={`w-3.5 h-3.5 ${totalRepairCount > 0 ? 'text-amber-600' : 'text-slate-400'}`} />
-                      <span>{totalRepairCount} lần</span>
-                    </button>
-                  </td>
-
                   {/* Action Buttons */}
                   <td className="py-3.5 px-4 text-right">
                     <div className="flex items-center justify-end space-x-1">
-                      {/* Export Single Machine History */}
+                      {/* 1. Nút Thêm/Quản lý sửa chữa */}
                       <button
-                        onClick={() => onExportSingleReport(comp)}
-                        className="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
-                        title="Xuất file Excel thông tin máy tính này (gồm lịch sử sửa chữa)"
+                        onClick={() => onOpenRepairModal(comp)}
+                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                        title="Thêm/Quản lý lịch sử sửa chữa"
                       >
-                        <FileSpreadsheet className="w-4 h-4" />
+                        <Wrench className="w-4 h-4" />
                       </button>
 
-                      {/* Edit */}
+                      {/* 2. Nút Tải xuống lịch sử sửa chữa (Icon Download màu xanh lá) */}
+                      <button
+                        onClick={() => onExportSingleReport(comp)}
+                        className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                        title="Tải xuống lịch sử sửa chữa"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+
+                      {/* 3. Nút Sửa thông tin */}
                       <button
                         onClick={() => onEdit(comp)}
-                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                        className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
                         title="Chỉnh sửa thông tin máy tính"
                       >
                         <Edit className="w-4 h-4" />
                       </button>
 
-                      {/* Delete */}
+                      {/* 4. Nút Xóa */}
                       <button
                         onClick={() => onDelete(comp.id)}
                         className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"

@@ -20,6 +20,28 @@ export const formatCurrency = (amount: number): string => {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
 };
 
+/**
+ * Hàm hỗ trợ format danh sách sửa chữa thành chuỗi xuống dòng kèm STT, Ngày, Nội dung, Chi phí
+ */
+export const formatRepairHistoryText = (repairs?: RepairRecord[]): string => {
+  if (!repairs || repairs.length === 0) {
+    return 'Chưa có lịch sử sửa chữa';
+  }
+
+  return repairs
+    .map((item, index) => {
+      const ngayFormatted = item.ngay
+        ? item.ngay.split('-').reverse().join('/')
+        : 'N/A';
+      const giaFormatted = item.chiPhi
+        ? `${item.chiPhi.toLocaleString('vi-VN')}đ`
+        : '0đ';
+
+      return `${index + 1}. [${ngayFormatted}]: ${item.noiDung} (${giaFormatted})`;
+    })
+    .join('\n'); // Xuống dòng cho mỗi lần sửa chữa
+};
+
 // 1. TẢI FILE MẪU EXCEL
 export const downloadTemplate = (type: 'man_hinh' | 'may_tinh' | 'may_in') => {
   const wb = XLSX.utils.book_new();
@@ -106,7 +128,7 @@ export const parseExcelFile = async (file: File, type: 'man_hinh' | 'may_tinh' |
         }
 
         jsonRows.forEach((row, idx) => {
-          const rowNum = idx + 2; // header is row 1
+          const rowNum = idx + 2;
 
           if (type === 'man_hinh') {
             const maQuanLy = (row['Mã Quản Lý (*)'] || row['Mã Quản Lý'] || row['Mã quản lý'] || row['MA_QUAN_LY'] || '').toString().trim();
@@ -205,12 +227,9 @@ export const exportEquipmentToExcel = (
 
   const wb = XLSX.utils.book_new();
 
-  // Sheet 1: Máy Tính (Có kèm tóm tắt Lịch sử sửa chữa)
+  // Sheet 1: Máy Tính
   const computerRows = filteredComputers.map((c, idx) => {
-    const repairHistoryText = c.lichSuSuaChua.length > 0
-      ? c.lichSuSuaChua.map((r, rIdx) => `[Lần ${rIdx + 1} - ${r.ngaySua}] ${r.noiDung} (${r.donViSua})`).join(' | ')
-      : 'Chưa có sửa chữa';
-
+    const repairs = c.lichSuSuaChua || [];
     return {
       'STT': idx + 1,
       'Mã Quản Lý': c.maQuanLy,
@@ -222,8 +241,8 @@ export const exportEquipmentToExcel = (
       'Năm Sử Dụng': c.namSuDung,
       'Nguyên Giá (VNĐ)': c.nguyenGia,
       'Tình Trạng': STATUS_LABELS[c.tinhTrang],
-      'Số Lần Sửa Chữa': c.lichSuSuaChua.length,
-      'Lịch Sử Sửa Chữa Chi Tiết': repairHistoryText,
+      'Số Lần Sửa Chữa': repairs.length,
+      'Lịch Sử Sửa Chữa Chi Tiết': formatRepairHistoryText(repairs),
     };
   });
   const wsComputers = XLSX.utils.json_to_sheet(computerRows);
@@ -233,12 +252,9 @@ export const exportEquipmentToExcel = (
   ];
   XLSX.utils.book_append_sheet(wb, wsComputers, 'Danh Sách Máy Tính');
 
-  // Sheet 2: Máy In (Có kèm tóm tắt Lịch sử sửa chữa)
+  // Sheet 2: Máy In
   const printerRows = filteredPrinters.map((p, idx) => {
-    const repairHistoryText = p.lichSuSuaChua.length > 0
-      ? p.lichSuSuaChua.map((r, rIdx) => `[Lần ${rIdx + 1} - ${r.ngaySua}] ${r.noiDung} (${r.donViSua})`).join(' | ')
-      : 'Chưa có sửa chữa';
-
+    const repairs = p.lichSuSuaChua || [];
     return {
       'STT': idx + 1,
       'Mã Quản Lý': p.maQuanLy,
@@ -247,8 +263,8 @@ export const exportEquipmentToExcel = (
       'Năm Sử Dụng': p.namSuDung,
       'Nguyên Giá (VNĐ)': p.nguyenGia,
       'Tình Trạng': STATUS_LABELS[p.tinhTrang],
-      'Số Lần Sửa Chữa': p.lichSuSuaChua.length,
-      'Lịch Sử Sửa Chữa Chi Tiết': repairHistoryText,
+      'Số Lần Sửa Chữa': repairs.length,
+      'Lịch Sử Sửa Chữa Chi Tiết': formatRepairHistoryText(repairs),
     };
   });
   const wsPrinters = XLSX.utils.json_to_sheet(printerRows);
@@ -274,30 +290,30 @@ export const exportEquipmentToExcel = (
   // Sheet 4: Lịch Sử Sửa Chữa Tổng Hợp
   const allRepairRows: any[] = [];
   filteredComputers.forEach(c => {
-    c.lichSuSuaChua.forEach((r, idx) => {
+    (c.lichSuSuaChua || []).forEach((r, idx) => {
       allRepairRows.push({
         'Loại Thiết Bị': 'Máy tính',
         'Mã Quản Lý': c.maQuanLy,
         'Tên / Cấu Hình': c.cauHinh,
         'Khoa Phòng': c.khoaPhong,
         'STT Lần Sửa': idx + 1,
-        'Ngày Sửa Chữa': r.ngaySua,
+        'Ngày Sửa Chữa': r.ngay ? r.ngay.split('-').reverse().join('/') : '',
         'Nội Dung Sửa Chữa': r.noiDung,
-        'Đơn Vị Thực Hiện / Ghi Chú': r.donViSua
+        'Chi Phí (VNĐ)': r.chiPhi || 0
       });
     });
   });
   filteredPrinters.forEach(p => {
-    p.lichSuSuaChua.forEach((r, idx) => {
+    (p.lichSuSuaChua || []).forEach((r, idx) => {
       allRepairRows.push({
         'Loại Thiết Bị': 'Máy in',
         'Mã Quản Lý': p.maQuanLy,
         'Tên / Cấu Hình': p.ten,
         'Khoa Phòng': p.khoaPhong,
         'STT Lần Sửa': idx + 1,
-        'Ngày Sửa Chữa': r.ngaySua,
+        'Ngày Sửa Chữa': r.ngay ? r.ngay.split('-').reverse().join('/') : '',
         'Nội Dung Sửa Chữa': r.noiDung,
-        'Đơn Vị Thực Hiện / Ghi Chú': r.donViSua
+        'Chi Phí (VNĐ)': r.chiPhi || 0
       });
     });
   });
@@ -305,7 +321,7 @@ export const exportEquipmentToExcel = (
   if (allRepairRows.length > 0) {
     const wsRepairs = XLSX.utils.json_to_sheet(allRepairRows);
     wsRepairs['!cols'] = [
-      { wch: 14 }, { wch: 16 }, { wch: 35 }, { wch: 22 }, { wch: 12 }, { wch: 16 }, { wch: 45 }, { wch: 30 }
+      { wch: 14 }, { wch: 16 }, { wch: 35 }, { wch: 22 }, { wch: 12 }, { wch: 16 }, { wch: 45 }, { wch: 18 }
     ];
     XLSX.utils.book_append_sheet(wb, wsRepairs, 'Lịch Sử Sửa Chữa');
   }
@@ -317,7 +333,7 @@ export const exportEquipmentToExcel = (
   XLSX.writeFile(wb, fileName);
 };
 
-// 4. XUẤT CHI TIẾT 1 MÁY TÍNH HOẶC MÁY IN (XEM LỊCH SỬ SỬA CHỮA)
+// 4. XUẤT CHI TIẾT 1 MÁY TÍNH HOẶC MÁY IN (BÁO CÁO ĐƠN LẺ)
 export const exportSingleDeviceReport = (
   device: Computer | Printer,
   deviceType: 'may_tinh' | 'may_in',
@@ -356,14 +372,15 @@ export const exportSingleDeviceReport = (
 
   const repairHeader = [
     ['II. LỊCH SỬ BẢO TRÌ - SỬA CHỮA'],
-    ['STT', 'Ngày sửa chữa', 'Nội dung công việc sửa chữa / thay thế', 'Đơn vị thực hiện / Ghi chú']
+    ['STT', 'Ngày sửa chữa', 'Nội dung công việc sửa chữa / thay thế', 'Chi phí (VNĐ)']
   ];
 
-  const repairData = device.lichSuSuaChua.map((r, idx) => [
+  const repairs = device.lichSuSuaChua || [];
+  const repairData = repairs.map((r, idx) => [
     idx + 1,
-    r.ngaySua,
+    r.ngay ? r.ngay.split('-').reverse().join('/') : '',
     r.noiDung,
-    r.donViSua
+    r.chiPhi ? `${r.chiPhi.toLocaleString('vi-VN')} đ` : '0 đ'
   ]);
 
   const finalRows = [
@@ -374,8 +391,8 @@ export const exportSingleDeviceReport = (
   ];
 
   const ws = XLSX.utils.aoa_to_sheet(finalRows);
-  ws['!cols'] = [{ wch: 8 }, { wch: 18 }, { wch: 45 }, { wch: 20 }, { wch: 30 }];
+  ws['!cols'] = [{ wch: 8 }, { wch: 18 }, { wch: 50 }, { wch: 20 }];
 
-  XLSX.utils.book_append_sheet(wb, ws, 'ThongTinThiEtBi');
+  XLSX.utils.book_append_sheet(wb, ws, 'ThongTinThietBi');
   XLSX.writeFile(wb, `ChiTiet_${device.maQuanLy}_${new Date().toISOString().slice(0, 10)}.xlsx`);
 };

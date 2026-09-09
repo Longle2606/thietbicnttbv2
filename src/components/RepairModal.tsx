@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Wrench, Plus, Trash2, Calendar, FileSpreadsheet, Building } from 'lucide-react';
+import { X, Wrench, Plus, Trash2, Calendar, FileSpreadsheet, Building, DollarSign } from 'lucide-react';
 import { Computer, Printer, RepairRecord } from '../types';
 
 interface RepairModalProps {
@@ -19,12 +19,13 @@ export const RepairModal: React.FC<RepairModalProps> = ({
 }) => {
   if (!device) return null;
 
-  const [repairs, setRepairs] = useState<RepairRecord[]>([...device.lichSuSuaChua]);
+  const [repairs, setRepairs] = useState<RepairRecord[]>([...(device.lichSuSuaChua || [])]);
   const [showAddForm, setShowAddForm] = useState(false);
 
-  // New repair form state
-  const [ngaySua, setNgaySua] = useState(new Date().toISOString().slice(0, 10));
+  // Form State
+  const [ngay, setNgay] = useState(new Date().toISOString().slice(0, 10));
   const [noiDung, setNoiDung] = useState('');
+  const [chiPhi, setChiPhi] = useState<number | ''>('');
   const [donViSua, setDonViSua] = useState('Tổ CNTT');
 
   const handleAddRepair = (e: React.FormEvent) => {
@@ -33,9 +34,9 @@ export const RepairModal: React.FC<RepairModalProps> = ({
 
     const newRecord: RepairRecord = {
       id: 'rep-' + Date.now(),
-      ngaySua,
+      ngay,
       noiDung: noiDung.trim(),
-      chiPhi: 0,
+      chiPhi: Number(chiPhi) || 0,
       donViSua: donViSua.trim() || 'Tổ CNTT',
     };
 
@@ -43,8 +44,9 @@ export const RepairModal: React.FC<RepairModalProps> = ({
     setRepairs(updated);
     onSaveRepair(device.id, updated);
 
-    // Reset form
+    // Reset Form
     setNoiDung('');
+    setChiPhi('');
     setShowAddForm(false);
   };
 
@@ -63,7 +65,7 @@ export const RepairModal: React.FC<RepairModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 overflow-y-auto">
       <div className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200 my-8">
-        {/* Modal Header */}
+        {/* Header */}
         <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl border border-amber-500/30">
@@ -95,8 +97,8 @@ export const RepairModal: React.FC<RepairModalProps> = ({
           </div>
         </div>
 
+        {/* Body */}
         <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
-          {/* Summary Box */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
             <div>
               <span className="text-slate-500 font-medium">Mã quản lý:</span>
@@ -108,7 +110,6 @@ export const RepairModal: React.FC<RepairModalProps> = ({
             </div>
           </div>
 
-          {/* Add Repair Entry Button & Form */}
           {!showAddForm ? (
             <button
               onClick={() => setShowAddForm(true)}
@@ -118,7 +119,7 @@ export const RepairModal: React.FC<RepairModalProps> = ({
               <span>Ghi Nhận Lần Sửa Chữa Mới</span>
             </button>
           ) : (
-            <form onSubmit={handleAddRepair} className="bg-amber-50/60 border border-amber-200 p-4 rounded-xl space-y-4">
+            <form onSubmit={handleAddRepair} className="bg-amber-50/60 border border-amber-200 p-4 rounded-xl space-y-3">
               <div className="flex items-center justify-between border-b border-amber-200/80 pb-2">
                 <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wide flex items-center gap-1.5">
                   <Plus className="w-4 h-4 text-amber-600" />
@@ -140,8 +141,8 @@ export const RepairModal: React.FC<RepairModalProps> = ({
                   </label>
                   <input
                     type="date"
-                    value={ngaySua}
-                    onChange={(e) => setNgaySua(e.target.value)}
+                    value={ngay}
+                    onChange={(e) => setNgay(e.target.value)}
                     required
                     className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
                   />
@@ -161,6 +162,25 @@ export const RepairModal: React.FC<RepairModalProps> = ({
                 </div>
               </div>
 
+              {/* Ô NHẬP CHI PHÍ */}
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                  Chi Phí Sửa Chữa (VNĐ)
+                </label>
+                <div className="relative">
+                  <DollarSign className="w-4 h-4 text-slate-400 absolute left-2.5 top-2.5" />
+                  <input
+                    type="number"
+                    min="0"
+                    step="1000"
+                    value={chiPhi}
+                    onChange={(e) => setChiPhi(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="Nhập chi phí (VD: 150000)"
+                    className="w-full pl-8 pr-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="block text-[11px] font-semibold text-slate-700 mb-1">
                   Nội Dung Sửa Chữa / Thay Thế Linh Kiện (*)
@@ -175,7 +195,7 @@ export const RepairModal: React.FC<RepairModalProps> = ({
                 ></textarea>
               </div>
 
-              <div className="flex justify-end gap-2">
+              <div className="flex justify-end gap-2 pt-1">
                 <button
                   type="button"
                   onClick={() => setShowAddForm(false)}
@@ -193,7 +213,7 @@ export const RepairModal: React.FC<RepairModalProps> = ({
             </form>
           )}
 
-          {/* Repair History Timeline / Table */}
+          {/* List */}
           <div>
             <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-3">
               Danh Sách Các Lần Sửa Chữa
@@ -217,16 +237,22 @@ export const RepairModal: React.FC<RepairModalProps> = ({
                         </span>
                         <span className="text-xs font-bold text-slate-800 flex items-center gap-1">
                           <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                          {r.ngaySua}
+                          {r.ngay ? r.ngay.split('-').reverse().join('/') : r.ngaySua || 'N/A'}
                         </span>
                       </div>
                       <p className="text-xs text-slate-800 font-medium pl-1">{r.noiDung}</p>
-                      {r.donViSua && (
-                        <p className="text-[11px] text-slate-500 flex items-center gap-1 pl-1">
-                          <Building className="w-3 h-3 text-slate-400" />
-                          <span>Thực hiện: {r.donViSua}</span>
-                        </p>
-                      )}
+
+                      <div className="flex items-center gap-3 pl-1 text-[11px]">
+                        {r.donViSua && (
+                          <span className="text-slate-500 flex items-center gap-1">
+                            <Building className="w-3 h-3 text-slate-400" />
+                            Thực hiện: {r.donViSua}
+                          </span>
+                        )}
+                        <span className="font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                          Chi phí: {r.chiPhi ? Number(r.chiPhi).toLocaleString('vi-VN') : 0} VNĐ
+                        </span>
+                      </div>
                     </div>
 
                     <button
@@ -243,7 +269,7 @@ export const RepairModal: React.FC<RepairModalProps> = ({
           </div>
         </div>
 
-        {/* Modal Footer */}
+        {/* Footer */}
         <div className="bg-slate-50 px-6 py-3 border-t border-slate-200 flex justify-end">
           <button
             onClick={onClose}
