@@ -13,6 +13,7 @@ export interface Monitor {
   ten: string;
   khoaPhong: string;
   maQuanLy: string;
+  nguyenGia?: number; // 👈 Đã thêm nguyên giá (VNĐ)
   tinhTrang: EquipmentStatus;
   ghiChu?: string;
   ngayTao?: string;

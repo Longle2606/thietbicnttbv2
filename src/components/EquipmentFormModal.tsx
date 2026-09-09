@@ -33,13 +33,15 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
   const [isDeptDropdownOpen, setIsDeptDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // Shared numeric fields
+  const [nguyenGia, setNguyenGia] = useState<number>(0);
+
   // Computer specific
   const [cauHinh, setCauHinh] = useState('');
   const [ram, setRam] = useState('');
   const [viTriSuDung, setViTriSuDung] = useState('');
   const [maManHinh, setMaManHinh] = useState('');
   const [namSuDung, setNamSuDung] = useState<number>(new Date().getFullYear());
-  const [nguyenGia, setNguyenGia] = useState<number>(0);
 
   // Printer & Monitor specific
   const [ten, setTen] = useState('');
@@ -68,6 +70,7 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
         const mon = editingItem as Monitor;
         setTen(mon.ten || '');
         setGhiChu(mon.ghiChu || '');
+        setNguyenGia(mon.nguyenGia || 0);
       }
     } else {
       if (departments.length > 0) {
@@ -137,6 +140,7 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
         ten: ten.trim(),
         khoaPhong,
         tinhTrang,
+        nguyenGia: Number(nguyenGia) || 0,
         ghiChu: ghiChu.trim(),
       };
       onSaveMonitor(monitorData);
@@ -194,7 +198,7 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
               />
             </div>
 
-            {/* Khoa phòng Dropdown có ô tìm kiếm */}
+            {/* Khoa phòng Dropdown */}
             <div className="relative" ref={dropdownRef}>
               <label className="block font-bold text-slate-700 mb-1 uppercase tracking-wider">
                 Khoa Phòng (*)
@@ -358,15 +362,28 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
           )}
 
           {type === 'man_hinh' && (
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Ghi Chú Màn Hình</label>
-              <input
-                type="text"
-                value={ghiChu}
-                onChange={(e) => setGhiChu(e.target.value)}
-                placeholder="VD: Hoạt động tốt, cổng kết nối HDMI/VGA..."
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Nguyên Giá (VNĐ)</label>
+                <input
+                  type="number"
+                  value={nguyenGia}
+                  onChange={(e) => setNguyenGia(Number(e.target.value))}
+                  placeholder="VD: 2500000"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Ghi Chú Màn Hình</label>
+                <input
+                  type="text"
+                  value={ghiChu}
+                  onChange={(e) => setGhiChu(e.target.value)}
+                  placeholder="VD: Hoạt động tốt, cổng HDMI/VGA..."
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                />
+              </div>
             </div>
           )}
 
